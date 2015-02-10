@@ -1,76 +1,79 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-import os
+
+#    Copyright 2015 Alexander Roessler (mail AT roessler DOT systems)
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
 import sys
-import codecs
 import argparse
+import re
 
 replacements = [
-    [" E", " A"],
-    ["G10", "G22"],
-    ["G11", "G23"]
-    ]
-unsupported = [
-    "M82"
-    ]
-endCode = "M2"
+    [r'((?:G0|G1|G92).*)(?:E)([\d\.].*)', r'\1A\2'],
+    [r'G10', r'G22'],
+    [r'G11', r'G23'],
+    [r'((?:M104|M106|M109|M140|M141|M190|M191).*)(?:S)([\d\.].*)', r'\1P\2'],
+    [r'.*M82.*', '']
+]
+
+endCode = 'M2 ; end of program'
+endTerm = r'(?:\s*M2.*|\s%.*)'
+
+regMatch = []
 
 
+def compile_replacements():
+    for regexString, replacement in replacements:
+        regex = re.compile(regexString, flags=re.IGNORECASE)
+        regMatch.append([regex, replacement])
+                        
+        
 def do_replacements(line):
-    for replacement in replacements:
-        line = line.replace(replacement[0], replacement[1])
-    for code in unsupported:
-        if code in line:
-            line = ""
-            break
+    for regex, replacement in regMatch:
+        line = regex.sub(replacement, line)
     return line
+
 
 def main():
     parser = argparse.ArgumentParser(description='This application converts RepRap flavour GCode to Machinekit flavour GCode')
-    parser.add_argument('input', nargs=1, help='input file')
-    parser.add_argument('output', nargs='?', help='output file, prints output to stdout of not specified', default=None)
+    parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), 
+                        default=sys.stdin, help='input file, takes input from stdin if not specified')
+    parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'), 
+                        default=sys.stdout, help='output file, prints output to stdout of not specified')
     parser.add_argument('-d', '--debug', help='enable debug mode', action='store_true')
-
     args = parser.parse_args()
 
     hasProgramEnd = False
-    inputFile = args.input[0]
-    outputFile = args.output
-    inFile = None
-    outFile = None
+    inFile = args.infile
+    outFile = args.outfile
 
-    try:
-        inFile = codecs.open(inputFile, "r", "utf-8")
-    except IOError as e:
-        sys.stdout.write(str(e) + '\n')
-        exit(1)
-        
-    try:
-        if outputFile is not None:
-            outFile = codecs.open(outputFile, "w", "utf-8")
-    except IOError as e:
-        sys.stdout.write(str(e) + '\n')
-        inFile.close()
-        exit(1)
-
+    compile_replacements()
+    endRegex = re.compile(endTerm, flags=re.IGNORECASE)
     for line in inFile:
         newline = do_replacements(line)
-        if outFile is None:
-            sys.stdout.write(newline)
-        else:
-            outFile.write(newline)
-        if (newline[:2] == "M2") or (newline[:1] == "%"):  # check for end of program
+        outFile.write(newline)
+        if (not hasProgramEnd) and endRegex.match(newline):  # check for end of program
             hasProgramEnd = True
             
     if not hasProgramEnd:
-        if outFile is None:
-            sys.stdout.write(endCode + "\n")
-        else:
-            outFile.write(endCode + "\n")
-        
+        outFile.write(endCode + "\n")
+            
     inFile.close()
-    if outFile is not None:
-        outFile.close()
+    outFile.close()
+    
     exit(0)
     
 if __name__ == "__main__":
