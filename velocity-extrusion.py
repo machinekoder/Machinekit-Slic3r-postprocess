@@ -36,7 +36,7 @@ class gcode(object):
         self.inFile = None
         self.outFile = None
         self.tmpFile = None
-        
+
     def initVariables(self):
         self.regMatch = {}
         self.line_count = 0
@@ -352,9 +352,9 @@ class gcode(object):
             self.output_line_count = self.output_line_count + 1
         else:
             self.crossList.append(cross)
-        
+
     def outputCross(self, cross):
-        s = "M600 P{0:g}".format(cross) + " "
+        s = "M700 P{0:g}".format(cross) + " "
         self.outputLine(s)
 
     def optimizeCross(self):
